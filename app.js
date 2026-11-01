@@ -20,6 +20,14 @@ const defaultOrigins = [
   'https://rn-smartelectronic-campany-ltdrw.vercel.app',
 ];
 
+const wildcardAllowedOrigins = [
+  /^https:\/\/.*\.vercel\.app$/i,
+  /^https:\/\/.*\.netlify\.app$/i,
+  /^https:\/\/.*\.onrender\.com$/i,
+  /^https:\/\/.*\.render\.com$/i,
+  /^https:\/\/.*\.github\.dev$/i,
+];
+
 const allowedOrigins = [...defaultOrigins, ...(process.env.CLIENT_URL || '').split(',')]
   .map((origin) => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
@@ -37,8 +45,12 @@ app.use(
   cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
+
       const normalized = origin.replace(/\/+$/, '');
       if (allowedOrigins.includes(normalized)) return callback(null, true);
+      if (wildcardAllowedOrigins.some((pattern) => pattern.test(normalized))) {
+        return callback(null, true);
+      }
       if (process.env.NODE_ENV !== 'production') return callback(null, true);
       return callback(new Error('Origin not allowed by CORS'));
     },
