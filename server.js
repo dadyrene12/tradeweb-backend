@@ -9,7 +9,7 @@ const PORT = Number(process.env.PORT) || 5000;
 const validateEnvironment = () => {
   if (process.env.NODE_ENV !== 'production') return;
 
-  const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'MONGODB_URI', 'CLIENT_URL'];
+  const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'MONGODB_URI'];
   const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length) {

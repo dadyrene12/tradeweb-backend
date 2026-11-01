@@ -12,9 +12,16 @@ const { notFound, errorHandler } = require('./middleware/error');
 
 const app = express();
 
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000,http://127.0.0.1:3000')
-  .split(',')
-  .map((origin) => origin.trim())
+const defaultOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://rn-smartelectronic-campany-ltdrw.vercel.app',
+];
+
+const allowedOrigins = [...defaultOrigins, ...(process.env.CLIENT_URL || '').split(',')]
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
 app.disable('x-powered-by');
@@ -30,7 +37,8 @@ app.use(
   cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      const normalized = origin.replace(/\/+$/, '');
+      if (allowedOrigins.includes(normalized)) return callback(null, true);
       if (process.env.NODE_ENV !== 'production') return callback(null, true);
       return callback(new Error('Origin not allowed by CORS'));
     },
