@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const { auth, adminAuth } = require('../middleware/auth');
 const router = express.Router();
@@ -7,6 +8,8 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const { category, search, featured, limit = 100, page = 1 } = req.query;
+    const limitNumber = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 200);
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
     const query = {};
 
     if (category) query.category = String(category).trim().toLowerCase();
@@ -21,16 +24,16 @@ router.get('/', async (req, res) => {
     }
 
     const products = await Product.find(query)
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
+      .limit(limitNumber)
+      .skip((pageNumber - 1) * limitNumber)
       .sort({ createdAt: -1 });
 
     const count = await Product.countDocuments(query);
 
     res.json({
       products,
-      totalPages: Math.ceil(count / limit),
-      currentPage: Number(page) || 1
+      totalPages: Math.ceil(count / limitNumber),
+      currentPage: pageNumber
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -40,7 +43,11 @@ router.get('/', async (req, res) => {
 // Get single product
 router.get('/:id', async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const { id } = req.params;
+    const filter = mongoose.Types.ObjectId.isValid(id)
+      ? { $or: [{ _id: id }, { slug: id }] }
+      : { slug: id };
+    const product = await Product.findOne(filter);
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }

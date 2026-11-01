@@ -3,67 +3,130 @@ const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 
 dotenv.config({ path: path.join(__dirname, '../.env') });
-if (!process.env.MONGO_URI && process.env.MONGODB_URI) process.env.MONGO_URI = process.env.MONGODB_URI;
 
 const Product = require('../models/Product');
 const Category = require('../models/Category');
-const products = require('../../client/src/data/products').default || require('../../client/src/data/products');
+const catalog = require('../../client/src/data/products');
+
+const products = catalog.default || catalog.products || [];
+
+const CATEGORY_META = {
+  appliances: {
+    name: 'Home Appliances',
+    description: 'Refrigerators, freezers, washing machines, fans, coolers and other home essentials.',
+    order: 1,
+  },
+  audio: {
+    name: 'TVs & Audio',
+    description: 'Smart TVs, speakers, sound systems and home entertainment.',
+    order: 2,
+  },
+  video: {
+    name: 'TVs & Video',
+    description: 'Televisions, displays and video equipment.',
+    order: 3,
+  },
+};
 
 const slugify = (value) =>
-  value
-    .toString()
+  String(value || '')
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-async function run() {
-  await mongoose.connect(process.env.MONGO_URI);
-  console.log('Connected');
+async function syncCategories() {
+  const slugs = [...new Set(products.map((product) => slugify(product.category)).filter(Boolean))];
 
-  const cats = [...new Set(products.map((p) => p.category).filter(Boolean))];
-  for (const c of cats) {
-    const slug = slugify(c);
-    await Category.findOneAndUpdate(
-      { slug },
-      { name: c, slug, active: true, order: 0 },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-  }
-  console.log('Categories synced');
+  for (const slug of slugs) {
+    const meta = CATEGORY_META[slug] || {
+      name: slug.replace(/-/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase()),
+      description: '',
+      order: 0,
+    };
 
-  for (const p of products) {
-    const slug = slugify(p.name);
-    await Product.findOneAndUpdate(
-      { $or: [{ slug }, { name: p.name }] },
-      {
-        name: p.name,
+    const existing = await Category.findOne({ slug });
+
+    if (!existing) {
+      await Category.create({
+        name: meta.name,
         slug,
-        description: p.description || p.name,
-        price: p.price,
-        oldPrice: p.oldPrice || null,
-        category: slugify(p.category),
-        images: p.image ? [p.image] : [],
-        stock: p.stock || 100,
-        rating: p.rating || 0,
-        numReviews: 0,
-        featured: Boolean(p.featured || p.badge),
-        isBestseller: p.badge === 'BESTSELLER',
-        isHot: p.badge === 'HOT',
-        isNewArrival: p.badge === 'NEW',
-        dealOfTheDay: false,
-        showOnHomepage: true,
-        homepageOrder: 0,
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+        description: meta.description,
+        order: meta.order,
+        active: true,
+      });
+      continue;
+    }
+
+    if (existing.name === existing.slug) {
+      existing.name = meta.name;
+      existing.description = existing.description || meta.description;
+      existing.order = existing.order || meta.order;
+      await existing.save();
+    }
   }
 
-  console.log(`Seeded ${products.length} products`);
+  return slugs.length;
+}
+
+async function run() {
+  await mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI);
+  console.log('Connected to MongoDB');
+
+  const categoryCount = await syncCategories();
+  console.log(`Synced ${categoryCount} categories`);
+
+  let inserted = 0;
+  let skipped = 0;
+
+  for (const [index, productData] of products.entries()) {
+    const images =
+      Array.isArray(productData.images) && productData.images.length
+        ? productData.images
+        : productData.image
+          ? [productData.image]
+          : [];
+
+    const result = await Product.updateOne(
+      { sourceId: productData.id },
+      {
+        $setOnInsert: {
+          sourceId: productData.id,
+          name: productData.name,
+          slug: `${slugify(productData.name)}-${productData.id}`,
+          description: productData.description || productData.name,
+          price: Number(productData.price) || 0,
+          oldPrice: productData.oldPrice ? Number(productData.oldPrice) : null,
+          category: slugify(productData.category),
+          subcategory: productData.subcategory || '',
+          images,
+          stock: Number(productData.stock) || 0,
+          brand: productData.brand || '',
+          rating: Number(productData.rating) || 0,
+          numReviews: 0,
+          featured: Boolean(productData.featured),
+          isBestseller: productData.badge === 'BESTSELLER',
+          isHot: productData.badge === 'HOT',
+          isNewArrival: productData.badge === 'NEW',
+          dealOfTheDay: false,
+          dealSold: 0,
+          dealAvailable: 0,
+          homepageOrder: index,
+          showOnHomepage: true,
+        },
+      },
+      { upsert: true }
+    );
+
+    if (result.upsertedCount) inserted += 1;
+    else skipped += 1;
+  }
+
+  console.log(`Inserted ${inserted} products, skipped ${skipped} existing products`);
   await mongoose.disconnect();
 }
 
-run().catch((err) => {
-  console.error(err);
+run().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

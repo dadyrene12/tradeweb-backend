@@ -12,6 +12,11 @@ const ProductSchema = new mongoose.Schema({
     lowercase: true,
     index: true,
   },
+  sourceId: {
+    type: Number,
+    unique: true,
+    sparse: true,
+  },
   description: {
     type: String,
     required: true
