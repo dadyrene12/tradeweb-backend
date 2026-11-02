@@ -92,7 +92,7 @@ router.post('/quick', optionalAuth, async (req, res) => {
         country: cleanText(customer.country, 80) || 'Rwanda',
         phone: cleanText(customer.phone, 40) || 'Not provided',
       },
-      contactEmail: cleanText(customer.email || req.user?.email, 160),
+      contactEmail: cleanText(customer.email, 160) || cleanText(req.user?.email, 160),
       source: channel,
       orderRef: cleanText(body.orderRef, 40).toUpperCase() || makeOrderRef(),
       note: cleanText(body.note, 1000),
