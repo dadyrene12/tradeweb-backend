@@ -45,6 +45,17 @@ const auth = async (req, res, next) => {
   }
 };
 
+const optionalAuth = async (req, res, next) => {
+  try {
+    const user = await resolveUser(req);
+    if (user) req.user = user;
+  } catch (error) {
+    /* ignore invalid/expired tokens for public endpoints */
+  }
+
+  return next();
+};
+
 const adminAuth = async (req, res, next) => {
   auth(req, res, () => {
     if (req.user.role !== 'admin') {
@@ -57,4 +68,4 @@ const adminAuth = async (req, res, next) => {
   });
 };
 
-module.exports = { auth, adminAuth };
+module.exports = { auth, optionalAuth, adminAuth };

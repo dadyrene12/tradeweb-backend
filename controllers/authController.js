@@ -18,28 +18,34 @@ const RESET_TTL_MS = 60 * 60 * 1000;
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
-const cookieOptions = (maxAge) => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-  path: '/',
-  ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
-  ...(typeof maxAge === 'number' ? { maxAge } : {}),
-});
+const cookieOptions = (req, maxAge) => {
+  const origin = (req?.headers?.origin || '').toLowerCase();
+  const isLocalOrigin = /^(http:\/\/localhost|http:\/\/127\.0\.0\.1|http:\/\/\[::1\])/.test(origin);
+  const isSecureCrossSite = /^(https:\/\/)/.test(origin) && !isLocalOrigin;
 
-const setAuthCookies = (res, accessToken, refreshToken, rememberMe) => {
-  res.cookie('accessToken', accessToken, cookieOptions(accessTokenMaxAge()));
-  res.cookie('refreshToken', refreshToken, cookieOptions(refreshTokenMaxAge(rememberMe)));
+  return {
+    httpOnly: true,
+    secure: isSecureCrossSite || process.env.NODE_ENV === 'production',
+    sameSite: isSecureCrossSite || process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/',
+    ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
+    ...(typeof maxAge === 'number' ? { maxAge } : {}),
+  };
+};
+
+const setAuthCookies = (req, res, accessToken, refreshToken, rememberMe) => {
+  res.cookie('accessToken', accessToken, cookieOptions(req, accessTokenMaxAge()));
+  res.cookie('refreshToken', refreshToken, cookieOptions(req, refreshTokenMaxAge(rememberMe)));
   res.cookie('glectron_session', '1', {
-    ...cookieOptions(refreshTokenMaxAge(rememberMe)),
+    ...cookieOptions(req, refreshTokenMaxAge(rememberMe)),
     httpOnly: false,
   });
 };
 
-const clearAuthCookies = (res) => {
-  res.clearCookie('accessToken', cookieOptions());
-  res.clearCookie('refreshToken', cookieOptions());
-  res.clearCookie('glectron_session', { ...cookieOptions(), httpOnly: false });
+const clearAuthCookies = (req, res) => {
+  res.clearCookie('accessToken', cookieOptions(req));
+  res.clearCookie('refreshToken', cookieOptions(req));
+  res.clearCookie('glectron_session', { ...cookieOptions(req), httpOnly: false });
 };
 
 const createSession = async (user, req, rememberMe = false) => {
@@ -233,7 +239,7 @@ const login = asyncHandler(async (req, res) => {
   await user.resetLoginAttempts();
 
   const { accessToken, refreshToken } = await createSession(user, req, Boolean(rememberMe));
-  setAuthCookies(res, accessToken, refreshToken, Boolean(rememberMe));
+  setAuthCookies(req, res, accessToken, refreshToken, Boolean(rememberMe));
 
   res.json({
     message: 'Signed in successfully.',
@@ -253,13 +259,13 @@ const refresh = asyncHandler(async (req, res) => {
   try {
     decoded = verifyRefreshToken(token);
   } catch (error) {
-    clearAuthCookies(res);
+    clearAuthCookies(req, res);
     throw new AppError('Session expired. Please sign in again.', 401, 'INVALID_REFRESH_TOKEN');
   }
 
   const user = await User.findById(decoded.sub).select('+refreshTokens');
   if (!user) {
-    clearAuthCookies(res);
+    clearAuthCookies(req, res);
     throw new AppError('Session expired. Please sign in again.', 401, 'INVALID_REFRESH_TOKEN');
   }
 
@@ -274,7 +280,7 @@ const refresh = asyncHandler(async (req, res) => {
       (item) => new Date(item.expiresAt).getTime() > now
     );
     await user.save({ validateBeforeSave: false });
-    clearAuthCookies(res);
+    clearAuthCookies(req, res);
     throw new AppError('Session expired. Please sign in again.', 401, 'INVALID_REFRESH_TOKEN');
   }
 
@@ -284,7 +290,7 @@ const refresh = asyncHandler(async (req, res) => {
 
   const rememberMe = Boolean(stored.rememberMe);
   const { accessToken, refreshToken } = await createSession(user, req, rememberMe);
-  setAuthCookies(res, accessToken, refreshToken, rememberMe);
+  setAuthCookies(req, res, accessToken, refreshToken, rememberMe);
 
   res.json({
     message: 'Session refreshed.',
@@ -313,7 +319,7 @@ const logout = asyncHandler(async (req, res) => {
     }
   }
 
-  clearAuthCookies(res);
+  clearAuthCookies(req, res);
   res.json({ message: 'Signed out successfully.' });
 });
 
@@ -366,7 +372,7 @@ const resetPassword = asyncHandler(async (req, res) => {
   user.lockUntil = undefined;
   await user.save();
 
-  clearAuthCookies(res);
+  clearAuthCookies(req, res);
   res.json({ message: 'Password updated successfully. Please sign in with your new password.' });
 });
 

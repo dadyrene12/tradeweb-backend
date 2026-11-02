@@ -178,7 +178,12 @@ const listOrders = asyncHandler(async (req, res) => {
       $or: [{ name: regex }, { email: regex }],
     }).select('_id');
 
-    const or = [{ 'shippingAddress.fullName': regex }, { 'shippingAddress.phone': regex }];
+    const or = [
+      { 'shippingAddress.fullName': regex },
+      { 'shippingAddress.phone': regex },
+      { contactEmail: regex },
+      { orderRef: regex },
+    ];
     if (matchingUsers.length) or.push({ user: { $in: matchingUsers.map((user) => user._id) } });
     if (/^[a-f0-9]{24}$/i.test(search)) or.push({ _id: search });
 
