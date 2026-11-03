@@ -57,6 +57,8 @@ router.put(
 
 router.delete('/products/:id', adminController.deleteProduct);
 
+router.post('/products/:id/instagram', adminController.publishProductToInstagram);
+
 router.get('/orders', adminController.listOrders);
 router.get('/orders/:id', adminController.getOrder);
 

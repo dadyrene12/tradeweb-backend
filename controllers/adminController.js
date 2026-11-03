@@ -6,6 +6,7 @@ const Category = require('../models/Category');
 const HomepageSettings = require('../models/HomepageSettings');
 const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
+const { publishProductToInstagram: publishInstagramProduct } = require('../utils/instagram');
 
 const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -161,6 +162,28 @@ const deleteProduct = asyncHandler(async (req, res) => {
   if (!product) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
 
   res.json({ message: 'Product deleted successfully.' });
+});
+
+const publishProductToInstagram = asyncHandler(async (req, res) => {
+  const product = await Product.findById(req.params.id).lean();
+  if (!product) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
+
+  const clientBase = (process.env.CLIENT_URL || 'https://rn-smartelectronic-campany-ltdrw.vercel.app')
+    .split(',')[0]
+    .trim()
+    .replace(/\/+$/, '');
+  const serverBase = (process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`).replace(
+    /\/+$/,
+    ''
+  );
+
+  const caption = typeof req.body?.caption === 'string' ? req.body.caption : '';
+  const result = await publishInstagramProduct(product, { clientBase, serverBase, caption });
+
+  res.json({
+    message: 'Product posted to Instagram successfully.',
+    ...result,
+  });
 });
 
 const listOrders = asyncHandler(async (req, res) => {
@@ -456,6 +479,7 @@ module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
+  publishProductToInstagram,
   listOrders,
   getOrder,
   updateOrderStatus,

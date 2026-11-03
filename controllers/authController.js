@@ -134,7 +134,7 @@ const register = asyncHandler(async (req, res) => {
     await sendVerificationEmail(user, token.raw);
   } catch (error) {
     emailSent = false;
-    console.error('Failed to send verification email:', error.message);
+    console.error(`Failed to send verification email to ${user.email}:`, error);
   }
 
   res.status(201).json({
@@ -187,7 +187,7 @@ const resendVerification = asyncHandler(async (req, res) => {
     try {
       await sendVerificationEmail(user, raw);
     } catch (error) {
-      console.error('Failed to resend verification email:', error.message);
+      console.error(`Failed to resend verification email to ${user.email}:`, error);
     }
   }
 
@@ -340,7 +340,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     try {
       await sendPasswordResetEmail(user, raw);
     } catch (error) {
-      console.error('Failed to send password reset email:', error.message);
+      console.error(`Failed to send password reset email to ${user.email}:`, error);
     }
   }
 

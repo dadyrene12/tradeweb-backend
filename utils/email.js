@@ -1,28 +1,37 @@
 const nodemailer = require('nodemailer');
 
-const smtpConfigured = Boolean(
-  process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
-);
+const clean = (value) => String(value || '').trim();
+
+const smtpHost = clean(process.env.SMTP_HOST);
+const smtpUser = clean(process.env.SMTP_USER);
+const smtpPass = clean(process.env.SMTP_PASS);
+const resendApiKey = clean(process.env.RESEND_API_KEY);
+
+const smtpConfigured = Boolean(smtpHost && smtpUser && smtpPass);
+const resendConfigured = Boolean(resendApiKey);
+
+const emailProvider = resendConfigured ? 'resend' : smtpConfigured ? 'smtp' : null;
+const emailConfigured = Boolean(emailProvider);
 
 let transporter = null;
 
 if (smtpConfigured) {
   transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
+    host: smtpHost,
     port: Number(process.env.SMTP_PORT || 587),
     secure: String(process.env.SMTP_SECURE).toLowerCase() === 'true',
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: smtpUser,
+      pass: smtpPass,
     },
   });
 }
 
 const fromAddress = () =>
-  process.env.EMAIL_FROM || 'Glectron <no-reply@glectron.com>';
+  clean(process.env.EMAIL_FROM) || 'Glectron <no-reply@glectron.com>';
 
 const clientUrl = () =>
-  (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '');
+  (clean(process.env.CLIENT_URL).split(',')[0] || 'http://localhost:3000').replace(/\/$/, '');
 
 const layout = (title, content) => `
 <!doctype html>
@@ -64,8 +73,32 @@ const button = (href, label) => `
     ${label}
   </a>`;
 
+const sendWithResend = async ({ to, subject, html, text }) => {
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: fromAddress(),
+      to: [to],
+      subject,
+      html,
+      text,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`Resend API responded with ${response.status}: ${detail || response.statusText}`);
+  }
+
+  return response.json();
+};
+
 const sendMail = async ({ to, subject, html, text }) => {
-  if (!transporter) {
+  if (!emailConfigured) {
     if (process.env.NODE_ENV !== 'production') {
       console.info('\n[email:dev] Email service is not configured. Preview:');
       console.info(`To: ${to}`);
@@ -74,10 +107,40 @@ const sendMail = async ({ to, subject, html, text }) => {
       console.info('');
       return { preview: true };
     }
-    throw new Error('Email service is not configured');
+
+    throw new Error(
+      'Email service is not configured. Set RESEND_API_KEY, or SMTP_HOST, SMTP_USER and SMTP_PASS.'
+    );
+  }
+
+  if (emailProvider === 'resend') {
+    return sendWithResend({ to, subject, html, text });
   }
 
   return transporter.sendMail({ from: fromAddress(), to, subject, html, text });
+};
+
+const verifyEmailTransport = async () => {
+  if (!emailConfigured) {
+    console.warn(
+      '[email] No email provider configured. Set RESEND_API_KEY or SMTP_HOST/SMTP_USER/SMTP_PASS.'
+    );
+    return false;
+  }
+
+  if (emailProvider === 'resend') {
+    console.info('[email] Using Resend API.');
+    return true;
+  }
+
+  try {
+    await transporter.verify();
+    console.info(`[email] SMTP connection verified (${smtpHost}).`);
+    return true;
+  } catch (error) {
+    console.error(`[email] SMTP connection failed (${smtpHost}): ${error.message}`);
+    return false;
+  }
 };
 
 const sendVerificationEmail = async (user, rawToken) => {
@@ -121,7 +184,12 @@ const sendPasswordResetEmail = async (user, rawToken) => {
 };
 
 module.exports = {
+  sendMail,
   sendVerificationEmail,
   sendPasswordResetEmail,
+  verifyEmailTransport,
   smtpConfigured,
+  resendConfigured,
+  emailConfigured,
+  emailProvider,
 };

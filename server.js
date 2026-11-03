@@ -3,6 +3,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const app = require('./app');
 const connectDB = require('./config/db');
+const { verifyEmailTransport } = require('./utils/email');
 
 const PORT = Number(process.env.PORT) || 5000;
 
@@ -25,6 +26,7 @@ const start = async () => {
   try {
     validateEnvironment();
     await connectDB();
+    await verifyEmailTransport();
 
     const server = app.listen(PORT, () => {
       console.log(`Server running on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
