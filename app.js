@@ -17,6 +17,8 @@ const defaultOrigins = [
   'http://127.0.0.1:3000',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'https://www.rnsmartelectronic.rw',
+  'https://rnsmartelectronic.rw',
   'https://rn-smartelectronic-campany-ltdrw.vercel.app',
 ];
 
@@ -118,12 +120,12 @@ app.get('/share/product/:id', async (req, res) => {
     const product = await Product.findById(req.params.id).lean();
     if (!product) return res.status(404).type('html').send('<h1>Product not found</h1>');
 
-    const clientBase = (process.env.CLIENT_URL || 'https://rn-smartelectronic-campany-ltdrw.vercel.app')
+    const clientBase = (process.env.CLIENT_URL || 'https://www.rnsmartelectronic.rw')
       .split(',')[0]
       .trim()
       .replace(/\/+$/, '');
     const apiBase = `${req.protocol}://${req.get('host')}`;
-    const shareUrl = `${apiBase}/share/product/${product._id}`;
+    const shareUrl = `${clientBase}/share/product/${product._id}`;
     const productUrl = `${clientBase}/product/${product._id}`;
 
     const rawImage = product.images?.[0] || '/images/products/product-26.jpg';
@@ -143,6 +145,34 @@ app.get('/share/product/:id', async (req, res) => {
       productUrl,
     ].join('\n');
 
+    const productJsonLd = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: product.name,
+      description,
+      image: [imageUrl],
+      sku: String(product._id),
+      mpn: String(product._id),
+      brand: {
+        '@type': 'Brand',
+        name: product.brand || 'RN Smart Electronics',
+      },
+      category: product.category,
+      url: productUrl,
+      offers: {
+        '@type': 'Offer',
+        url: productUrl,
+        priceCurrency: 'RWF',
+        price: Number(product.price) || 0,
+        availability:
+          Number(product.stock) > 0
+            ? 'https://schema.org/InStock'
+            : 'https://schema.org/OutOfStock',
+        itemCondition: 'https://schema.org/NewCondition',
+        seller: { '@type': 'Organization', name: 'RN Smart Electronics' },
+      },
+    }).replace(/</g, '\\u003c');
+
     const html = `<!DOCTYPE html>
 <html lang="en-RW">
 <head>
@@ -150,6 +180,7 @@ app.get('/share/product/:id', async (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(description)}" />
+<meta name="robots" content="noindex, follow, max-image-preview:large" />
 <link rel="canonical" href="${escapeHtml(productUrl)}" />
 <meta property="og:type" content="product" />
 <meta property="og:site_name" content="RN Smart Electronics" />
@@ -157,12 +188,18 @@ app.get('/share/product/:id', async (req, res) => {
 <meta property="og:description" content="${escapeHtml(`${formatRwf(product.price)} — ${description}`)}" />
 <meta property="og:url" content="${escapeHtml(shareUrl)}" />
 <meta property="og:image" content="${escapeHtml(imageUrl)}" />
+<meta property="og:image:secure_url" content="${escapeHtml(imageUrl)}" />
 <meta property="og:image:alt" content="${escapeHtml(product.name)}" />
 <meta property="og:locale" content="en_RW" />
+<meta property="product:price:amount" content="${Number(product.price) || 0}" />
+<meta property="product:price:currency" content="RWF" />
+<meta property="product:availability" content="${Number(product.stock) > 0 ? 'in stock' : 'out of stock'}" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${escapeHtml(product.name)}" />
 <meta name="twitter:description" content="${escapeHtml(`${formatRwf(product.price)} — ${description}`)}" />
 <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
+<meta name="twitter:image:alt" content="${escapeHtml(product.name)}" />
+<script type="application/ld+json">${productJsonLd}</script>
 <style>
   body { margin:0; background:#f6f7f9; color:#0B1B33; font-family:Arial,Helvetica,sans-serif; }
   .wrap { max-width:640px; margin:0 auto; padding:20px; }
@@ -190,7 +227,7 @@ app.get('/share/product/:id', async (req, res) => {
         <div class="price">${escapeHtml(formatRwf(product.price))}</div>
         <p class="desc">${escapeHtml(description || 'Genuine product with warranty. Fast delivery in Kigali and across Rwanda.')}</p>
         <div class="actions">
-          <a class="wa" href="https://wa.me/250722189516?text=${encodeURIComponent(whatsappText)}">Order on WhatsApp</a>
+          <a class="wa" href="https://wa.me/250789015289?text=${encodeURIComponent(whatsappText)}">Order on WhatsApp</a>
           <a class="shop" href="${escapeHtml(productUrl)}">View product on our store</a>
         </div>
         <p class="note">Genuine product • Warranty • Fast delivery in Rwanda</p>
@@ -204,6 +241,111 @@ app.get('/share/product/:id', async (req, res) => {
   } catch (error) {
     res.status(404).type('html').send('<h1>Product not found</h1>');
   }
+});
+
+app.get('/sitemap.xml', async (req, res) => {
+  const clientBase = (process.env.CLIENT_URL || 'https://www.rnsmartelectronic.rw')
+    .split(',')[0]
+    .trim()
+    .replace(/\/+$/, '');
+  const apiBase = (process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`).replace(
+    /\/+$/,
+    ''
+  );
+
+  const escapeXml = (value) =>
+    String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+
+  const absoluteImage = (image) => {
+    if (!image) return '';
+    if (/^https?:\/\//i.test(image)) return image;
+    if (image.startsWith('/uploads/')) return `${apiBase}${image}`;
+    return `${clientBase}${image.startsWith('/') ? image : `/${image}`}`;
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const staticPages = [
+    { loc: '/', priority: '1.0', changefreq: 'daily' },
+    { loc: '/shop', priority: '0.9', changefreq: 'daily' },
+    { loc: '/blog', priority: '0.8', changefreq: 'weekly' },
+    { loc: '/contact', priority: '0.7', changefreq: 'monthly' },
+  ];
+
+  let products = [];
+  let categories = [];
+
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const Product = require('./models/Product');
+      const Category = require('./models/Category');
+      [products, categories] = await Promise.all([
+        Product.find({}).select('_id name images category updatedAt').sort({ updatedAt: -1 }).lean(),
+        Category.find({ active: { $ne: false } })
+          .select('slug updatedAt')
+          .sort({ order: 1, name: 1 })
+          .lean(),
+      ]);
+    }
+  } catch (error) {
+    products = [];
+    categories = [];
+  }
+
+  const urlEntries = [];
+
+  staticPages.forEach((page) => {
+    urlEntries.push(`  <url>
+    <loc>${escapeXml(`${clientBase}${page.loc}`)}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${page.changefreq}</changefreq>
+    <priority>${page.priority}</priority>
+  </url>`);
+  });
+
+  const productCategories = [...new Set([
+    ...categories.map((category) => category.slug),
+    ...products.map((product) => product.category),
+  ].filter(Boolean))];
+
+  productCategories.forEach((slug) => {
+    urlEntries.push(`  <url>
+    <loc>${escapeXml(`${clientBase}/shop?category=${encodeURIComponent(slug)}`)}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>`);
+  });
+
+  products.forEach((product) => {
+    const lastmod = (product.updatedAt ? new Date(product.updatedAt) : new Date())
+      .toISOString()
+      .slice(0, 10);
+    const image = absoluteImage((product.images || [])[0]);
+    urlEntries.push(`  <url>
+    <loc>${escapeXml(`${clientBase}/product/${product._id}`)}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>${image ? `
+    <image:image>
+      <image:loc>${escapeXml(image)}</image:loc>
+      <image:title>${escapeXml(product.name)}</image:title>
+    </image:image>` : ''}
+  </url>`);
+  });
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${urlEntries.join('\n')}
+</urlset>`;
+
+  res.set('Content-Type', 'application/xml; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+  res.send(xml);
 });
 
 app.get('/', (req, res) => {

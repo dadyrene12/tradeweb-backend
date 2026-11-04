@@ -168,7 +168,7 @@ const publishProductToInstagram = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id).lean();
   if (!product) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
 
-  const clientBase = (process.env.CLIENT_URL || 'https://rn-smartelectronic-campany-ltdrw.vercel.app')
+  const clientBase = (process.env.CLIENT_URL || 'https://www.rnsmartelectronic.rw')
     .split(',')[0]
     .trim()
     .replace(/\/+$/, '');

@@ -45,7 +45,7 @@ const buildCaption = (product, productUrl) => {
       : `💰 Special price: ${formatRwf(price)}`,
     '✅ Genuine product with warranty.',
     '🚚 Fast delivery in Kigali & across Rwanda.',
-    '💬 Order now on WhatsApp: +250 722 189 516',
+    '💬 Order now on WhatsApp: +250 789 015 289',
     `🛒 Shop now: ${productUrl}`,
     '',
     `#RNSmartElectronics #${categoryTag || 'Electronics'} ${brandTag ? `#${brandTag} ` : ''}#Kigali #Rwanda #HomeAppliances #Electronics #Deals #ShopLocal`,

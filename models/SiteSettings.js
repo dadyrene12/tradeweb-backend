@@ -28,12 +28,12 @@ const SiteSettingsSchema = new mongoose.Schema(
     },
     supportPhone: {
       type: String,
-      default: '+250 722 189 516',
+      default: '+250 789 015 289',
       trim: true,
     },
     whatsappNumber: {
       type: String,
-      default: '250722189516',
+      default: '250789015289',
       trim: true,
     },
     address: {
