@@ -12,6 +12,8 @@ const { notFound, errorHandler } = require('./middleware/error');
 
 const app = express();
 
+const OFFICIAL_SITE_URL = 'https://www.rnsmartelectronic.rw';
+
 const defaultOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
@@ -120,7 +122,7 @@ app.get('/share/product/:id', async (req, res) => {
     const product = await Product.findById(req.params.id).lean();
     if (!product) return res.status(404).type('html').send('<h1>Product not found</h1>');
 
-    const clientBase = (process.env.CLIENT_URL || 'https://www.rnsmartelectronic.rw')
+    const clientBase = (process.env.CLIENT_URL || OFFICIAL_SITE_URL)
       .split(',')[0]
       .trim()
       .replace(/\/+$/, '');
@@ -244,14 +246,10 @@ app.get('/share/product/:id', async (req, res) => {
 });
 
 app.get('/sitemap.xml', async (req, res) => {
-  const clientBase = (process.env.CLIENT_URL || 'https://www.rnsmartelectronic.rw')
-    .split(',')[0]
-    .trim()
-    .replace(/\/+$/, '');
-  const apiBase = (process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`).replace(
-    /\/+$/,
-    ''
-  );
+  const clientBase = OFFICIAL_SITE_URL;
+  const apiBase = (process.env.PUBLIC_SERVER_URL || `${req.protocol}://${req.get('host')}`)
+    .replace(/\/+$/, '')
+    .replace(/^http:/i, 'https:');
 
   const escapeXml = (value) =>
     String(value || '')
@@ -263,7 +261,7 @@ app.get('/sitemap.xml', async (req, res) => {
 
   const absoluteImage = (image) => {
     if (!image) return '';
-    if (/^https?:\/\//i.test(image)) return image;
+    if (/^https?:\/\//i.test(image)) return image.replace(/^http:/i, 'https:');
     if (image.startsWith('/uploads/')) return `${apiBase}${image}`;
     return `${clientBase}${image.startsWith('/') ? image : `/${image}`}`;
   };
@@ -272,8 +270,11 @@ app.get('/sitemap.xml', async (req, res) => {
   const staticPages = [
     { loc: '/', priority: '1.0', changefreq: 'daily' },
     { loc: '/shop', priority: '0.9', changefreq: 'daily' },
+    { loc: '/about', priority: '0.7', changefreq: 'monthly' },
     { loc: '/blog', priority: '0.8', changefreq: 'weekly' },
     { loc: '/contact', priority: '0.7', changefreq: 'monthly' },
+    { loc: '/privacy', priority: '0.4', changefreq: 'yearly' },
+    { loc: '/terms', priority: '0.4', changefreq: 'yearly' },
   ];
 
   let products = [];
