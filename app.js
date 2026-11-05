@@ -229,7 +229,7 @@ app.get('/share/product/:id', async (req, res) => {
         <div class="price">${escapeHtml(formatRwf(product.price))}</div>
         <p class="desc">${escapeHtml(description || 'Genuine product with warranty. Fast delivery in Kigali and across Rwanda.')}</p>
         <div class="actions">
-          <a class="wa" href="https://wa.me/250789015289?text=${encodeURIComponent(whatsappText)}">Order on WhatsApp</a>
+          <a class="wa" href="https://wa.me/250787015289?text=${encodeURIComponent(whatsappText)}">Order on WhatsApp</a>
           <a class="shop" href="${escapeHtml(productUrl)}">View product on our store</a>
         </div>
         <p class="note">Genuine product • Warranty • Fast delivery in Rwanda</p>
